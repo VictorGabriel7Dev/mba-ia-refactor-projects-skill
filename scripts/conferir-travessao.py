@@ -38,6 +38,7 @@ from __future__ import annotations
 import fnmatch
 import os
 import re
+import subprocess
 import sys
 
 # Escritos como escape de proposito: se o caractere aparecesse literal aqui,
@@ -113,10 +114,15 @@ DIRS_FORA = {
 # LICENSE fica de fora em TODOS os repos, de proposito: documento legal
 # padronizado, identico na casa inteira. Reescrever so aqui criaria drift
 # juridico entre repos. Expurgo ali, se um dia houver, e passada propria.
-FORA_SEMPRE = ("LICENSE", "LICENSE.txt", "LICENSE.md", "NOTICE")
+# `.env` fica de fora SEMPRE. Ele e' versionado, mas em producao quem manda nele
+# e' o `vw-sync-secrets`, que reescreve o arquivo a cada sync e assina o cabecalho
+# citando o NOME do item do Vaultwarden, que tem travessao de proposito. Varrer o
+# `.env` no deploy abortou tres sites em 31/08/2026 por causa de um cabecalho que
+# nao e' texto nosso e que nenhum PR poderia ter limpado.
+FORA_SEMPRE = ("LICENSE", "LICENSE.txt", "LICENSE.md", "NOTICE", ".env")
 
 
-SEM_EXT_OK = {"Dockerfile", "Makefile", "CODEOWNERS", ".editorconfig", ".env"}
+SEM_EXT_OK = {"Dockerfile", "Makefile", "CODEOWNERS", ".editorconfig"}
 
 # Literal de string sem letra nem digito, ou classe de regex: e' um CONJUNTO DE
 # CARACTERES, nao uma frase. Trocar o travessao ali muda comportamento. Caso real:
@@ -183,8 +189,29 @@ def _e_texto_nosso(nome: str, ext: str, caminho: str) -> bool:
     return not ext and _tem_shebang(caminho)
 
 
+def _rastreados() -> set[str] | None:
+    """Os arquivos que o git conhece, ou None se aqui nao for um repo.
+
+    O guard protege o CONTEUDO DO REPO. Em producao a working tree tambem tem
+    artefato de runtime, e ele nao e' nosso texto: o `.env` de cada site e'
+    escrito pelo `vw-sync-secrets`, e o cabecalho que ele gera cita o nome do
+    item do Vaultwarden, que tem travessao de proposito e nao pode ser reescrito.
+    Varrer a pasta em vez do indice do git abortou o deploy de tres sites em
+    31/08/2026, por um arquivo que nunca esteve no repositorio.
+    """
+    r = subprocess.run(
+        ["git", "-C", RAIZ, "ls-files", "-z"],
+        capture_output=True,
+        text=True,
+    )
+    if r.returncode != 0:
+        return None
+    return {p for p in r.stdout.split("\0") if p}
+
+
 def arquivos() -> list[str]:
     ignorados = globs_ignorados()
+    rastreados = _rastreados()
     achados = []
     for base, dirs, files in os.walk(RAIZ):
         dirs[:] = [d for d in dirs if d not in DIRS_FORA]
@@ -195,6 +222,8 @@ def arquivos() -> list[str]:
                 continue
             ext = os.path.splitext(f)[1].lower()
             if not _e_texto_nosso(f, ext, caminho):
+                continue
+            if rastreados is not None and rel not in rastreados:
                 continue
             if any(fnmatch.fnmatch(rel, g) for g in ignorados):
                 continue
@@ -242,6 +271,8 @@ def autoteste() -> int:
     falhas = []
 
     lista = arquivos()
+    if _rastreados() is None:
+        print("autoteste: fora de repo git, varredura por pasta", file=sys.stderr)
     if len(lista) < 3:
         falhas.append(f"varreu so {len(lista)} arquivo(s): o filtro esta errado")
 
