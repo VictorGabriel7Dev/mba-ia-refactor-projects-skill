@@ -269,7 +269,7 @@ Relatórios completos em `reports/audit-project-1.md`, `-2` e `-3`.
 | | relatório: 1+N+N*M consultas, 4 níveis de callback | 1 consulta com `LEFT JOIN`, `async/await` |
 | | `badCrypto()` reversível e colidível | scrypt com `timingSafeEqual` |
 | | `DELETE` deixava órfãos | exclusão em cascata, em transação |
-| **Projeto 3** | rotas com 733 linhas somadas | **118 linhas**, e nasceu `controllers/` |
+| **Projeto 3** | rotas com 733 linhas somadas | **131 linhas**, e nasceu `controllers/` |
 | | `overdue` copiado 6 vezes | `Task.is_overdue()`, uma vez |
 | | 4 pontos de N+1 | consultas agregadas |
 | | `to_dict()` vazando o hash da senha | projeção pública explícita |
