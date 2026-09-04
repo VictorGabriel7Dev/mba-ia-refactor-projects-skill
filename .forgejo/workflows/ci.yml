@@ -1,0 +1,45 @@
+# Workflow CI: gate de travessao.
+#
+# Regra perene da casa: nada de em-dash, en-dash ou barra horizontal no texto
+# que a gente escreve. O caractere entrega texto de IA, e ja quebrou num sistema
+# legado que gravou lixo no lugar dele. Uma regra que depende de alguem lembrar
+# de rodar `grep` antes do merge nao se sustenta; esta trava sozinha.
+#
+# O job se chama `lint-and-test` para casar com o padrao da org e poder virar
+# status check obrigatorio na branch protection de main.
+#
+# Runner: `self-hosted` (host inova-kvm-runner-1).
+
+name: ci
+
+on:
+  push:
+    branches-ignore:
+      - "deploy/**"
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    runs-on: self-hosted
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Travessao (em-dash, en-dash, barra horizontal) BLOQUEANTE
+        run: |
+          python3 scripts/conferir-travessao.py --autoteste
+          python3 scripts/conferir-travessao.py
+
+      - name: Lint-and-test OK
+        run: |
+          echo "lint-and-test: ok"
