@@ -1,0 +1,38 @@
+{
+  "_boot": {
+    "subiu": true
+  },
+  "checkout_ok": {
+    "status": 200,
+    "forma": "objeto",
+    "chaves": [
+      "enrollment_id",
+      "msg"
+    ]
+  },
+  "checkout_negado": {
+    "status": 400,
+    "forma": "texto"
+  },
+  "checkout_faltando": {
+    "status": 400,
+    "forma": "texto"
+  },
+  "checkout_curso_404": {
+    "status": 404,
+    "forma": "texto"
+  },
+  "relatorio": {
+    "status": 200,
+    "forma": "lista[2]",
+    "chaves": [
+      "course",
+      "revenue",
+      "students"
+    ]
+  },
+  "deletar_usuario": {
+    "status": 200,
+    "forma": "texto"
+  }
+}

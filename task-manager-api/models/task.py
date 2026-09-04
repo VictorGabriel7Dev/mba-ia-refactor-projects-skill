@@ -1,6 +1,7 @@
+from config.constants import PRIORIDADE_MAX, PRIORIDADE_MIN, STATUS_FINAIS, STATUS_VALIDOS
 from database import db
-from datetime import datetime
-import json
+from utils.tempo import agora_utc
+
 
 class Task(db.Model):
     __tablename__ = 'tasks'
@@ -12,8 +13,8 @@ class Task(db.Model):
     priority = db.Column(db.Integer, default=3)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=agora_utc)
+    updated_at = db.Column(db.DateTime, default=agora_utc, onupdate=agora_utc)
     due_date = db.Column(db.DateTime, nullable=True)
     tags = db.Column(db.String(500), nullable=True)
 
@@ -21,40 +22,34 @@ class Task(db.Model):
     category = db.relationship('Category', backref='tasks')
 
     def to_dict(self):
-        data = {}
-        data['id'] = self.id
-        data['title'] = self.title
-        data['description'] = self.description
-        data['status'] = self.status
-        data['priority'] = self.priority
-        data['user_id'] = self.user_id
-        data['category_id'] = self.category_id
-        data['created_at'] = str(self.created_at)
-        data['updated_at'] = str(self.updated_at)
-        data['due_date'] = str(self.due_date) if self.due_date else None
-        data['tags'] = self.tags.split(',') if self.tags else []
-        return data
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'status': self.status,
+            'priority': self.priority,
+            'user_id': self.user_id,
+            'category_id': self.category_id,
+            'created_at': str(self.created_at),
+            'updated_at': str(self.updated_at),
+            'due_date': str(self.due_date) if self.due_date else None,
+            'tags': self.tags.split(',') if self.tags else [],
+        }
 
-    def validate_status(self, new_status):
-        valid = ['pending', 'in_progress', 'done', 'cancelled']
-        if new_status in valid:
-            return True
-        else:
-            return False
+    @staticmethod
+    def validate_status(novo_status):
+        return novo_status in STATUS_VALIDOS
 
-    def validate_priority(self, p):
-        if p >= 1 and p <= 5:
-            return True
-        return False
+    @staticmethod
+    def validate_priority(p):
+        return isinstance(p, int) and PRIORIDADE_MIN <= p <= PRIORIDADE_MAX
 
     def is_overdue(self):
-        if self.due_date:
-            if self.due_date < datetime.utcnow():
-                if self.status != 'done' and self.status != 'cancelled':
-                    return True
-                else:
-                    return False
-            else:
-                return False
-        else:
+        """A regra de atraso mora AQUI, e não copiada em quatro rotas.
+
+        Antes este mesmo `if` aninhado aparecia em `task_routes` (3 vezes),
+        `user_routes` e `report_routes` (2 vezes), cada cópia livre para divergir.
+        """
+        if not self.due_date:
             return False
+        return self.due_date < agora_utc() and self.status not in STATUS_FINAIS

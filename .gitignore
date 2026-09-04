@@ -10,3 +10,6 @@ venv/
 # SQLite
 *.db
 instance/
+
+# venv de validação criada por tools/smoke_test.py
+.venv-check/
