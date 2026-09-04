@@ -1,0 +1,18 @@
+# Arquivos fora do gate de travessao, cada um com o motivo.
+# Regra: so entra aqui o que NAO e texto de autoria nossa. Conteudo de terceiro
+# nao se reescreve: alterar o que e deles falseia o dado.
+
+# Enunciado OFICIAL da Full Cycle, preservado como recebido.
+#
+# Em 04/09/2026 o expurgo de travessao reescreveu 88 linhas deste arquivo, e em um
+# dos casos mudou o sentido: "adapte o nome da pasta e o comando de invocacao
+# conforme a convencao dela - o conceito de skill e a estrutura interna permanecem
+# os mesmos" virou uma frase corrida em que a segunda oracao passa a depender da
+# primeira. O texto foi restaurado e o arquivo entrou aqui: o gate vale para o que
+# NOS escrevemos.
+docs/ENUNCIADO.md
+
+# READMEs originais dos 3 projetos legados: material do desafio, nao texto nosso.
+code-smells-project/README.md
+ecommerce-api-legacy/README.md
+task-manager-api/README.md
