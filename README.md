@@ -5,8 +5,19 @@ Entrega do desafio da fase 295 do MBA em Engenharia de Software com IA (Full Cyc
 Uma Skill que analisa uma codebase, audita anti-patterns com severidade e refatora o projeto para
 o padrão MVC, funcionando nos três projetos legados deste repositório, em duas stacks diferentes.
 
-> **Estado:** análise manual concluída (requisito 1). A skill e a execução nos três projetos são
-> os passos seguintes. O enunciado original está preservado em `docs/ENUNCIADO.md`.
+> **Estado:** completo. Análise manual, skill, execução nos três projetos, refatoração e
+> relatórios. O enunciado original está preservado em `docs/ENUNCIADO.md`.
+>
+> | | code-smells-project | ecommerce-api-legacy | task-manager-api |
+> |---|---|---|---|
+> | Stack detectada | Python + Flask 3.1.1 | Node + Express 4.18.2 | Python + Flask 3.0.0 |
+> | Achados | **14** | **12** | **11** |
+> | CRITICAL ou HIGH | 8 | 7 | 5 |
+> | Endpoints validados | 17/17 | 6/6 | 16/16 |
+> | Aplicação sobe | ✅ | ✅ | ✅ |
+>
+> **37 achados** no total, e a aplicação dos três continua respondendo, verificado por
+> execução (`tools/smoke_test.py`), não por leitura.
 
 ## Análise Manual
 
@@ -114,14 +125,299 @@ detecção por padrão em vez de por ocorrência isolada.
 
 ## Construção da Skill
 
-_A ser preenchido: decisões de design, quais anti-patterns entraram no catálogo e por quê, como a
-skill se mantém agnóstica de tecnologia, e os desafios encontrados._
+A skill vive em `.claude/skills/refactor-arch/`, **dentro dos três projetos**, e as três
+cópias são idênticas byte a byte (`diff -r` vazio). Isso não é detalhe de organização: é a
+prova do agnosticismo. Se ela precisasse de um ajuste por projeto, não seria agnóstica.
+
+```
+refactor-arch/
+├── SKILL.md                          as 3 fases e as regras invioláveis de cada uma
+└── references/
+    ├── project-analysis.md           heurísticas de detecção de stack e arquitetura
+    ├── anti-patterns.md              17 anti-patterns com sinal e severidade
+    ├── report-template.md            formato do relatório da Fase 2
+    ├── mvc-guidelines.md             a arquitetura alvo e a direção das dependências
+    └── refactoring-playbook.md       12 transformações com código antes/depois
+```
+
+Mínimos do enunciado e o que foi entregue:
+
+| Exigência | Mínimo | Entregue |
+|---|---|---|
+| Anti-patterns no catálogo | 8 | **17** |
+| Severidades cobertas | 4 | 4 (6 CRITICAL, 4 HIGH, 5 MEDIUM, 2 LOW) |
+| Detecção de APIs deprecated | obrigatória | 7 casos, cada um com o substituto |
+| Transformações no playbook | 8 | **12**, todas com antes/depois |
+| Fase 2 pausa e pede confirmação | obrigatória | sim, com a pergunta literal |
+| Fase 3 valida boot + endpoints | obrigatória | sim, por execução real |
+
+### Por que o SKILL.md é curto e as referências são longas
+
+O `SKILL.md` é o **prompt**: diz o que fazer, em que ordem, e o que nunca pode ser quebrado.
+O conhecimento de domínio fica nas referências, que são lidas **no início da fase que precisa
+delas**. Carregar as cinco de uma vez enche o contexto com detalhe de refatoração enquanto o
+agente ainda está tentando descobrir qual é o framework.
+
+### Os anti-patterns que entraram, e por quê
+
+O catálogo não saiu de uma lista genérica de code smells. Cada entrada existe porque **apareceu
+nestes três projetos**, e a redação do sinal de detecção veio de um caso concreto:
+
+| Anti-pattern | O caso que o originou |
+|---|---|
+| `sql-injection` | login do projeto 1 concatenando email e senha crus |
+| `hardcoded-credentials` | `pk_live_` no projeto 2, `SECRET_KEY` no 1 e no 3, senha de SMTP no 3 |
+| `arbitrary-code-execution` | `/admin/query` do projeto 1, que executa o SQL do corpo |
+| `destructive-endpoint-without-auth` | `/admin/reset-db` do projeto 1 |
+| `broken-crypto` | `badCrypto()` no 2, MD5 sem salt no 3, texto plano no 1 |
+| `sensitive-data-in-response` | `to_dict()` com a senha no 3, `secret_key` no `/health` do 1 |
+| `god-class` / `god-file` | `models.py` com 314 linhas, `AppManager` com 141 |
+| `business-logic-in-route` | as rotas de 299, 223 e 211 linhas do projeto 3 |
+| `global-mutable-state` | `globalCache`/`totalRevenue` no 2, conexão global no 1 |
+| `no-dependency-injection` | banco no construtor do `AppManager`, SMTP no serviço do 3 |
+| `n-plus-1-query` | relatório do 2 (1+N+N*M) e quatro pontos no 3 |
+| `deprecated-api` | 19 usos de `datetime.utcnow()` no projeto 3 |
+| `manual-async-control-flow` | os contadores `coursesPending`/`enrPending` do projeto 2 |
+| `missing-input-validation` | `float()` sem `try` no 1, senha default `"123456"` no 2 |
+| `debug-mode-in-production` | `debug=True` com `0.0.0.0` no 1 e no 3 |
+| `inconsistent-error-handling` | 16 `except` iguais no 1, strings soltas no 2, `except:` nu no 3 |
+| `magic-values-and-weak-typing` | lista de status escrita 5 vezes no projeto 3 |
+
+### Como a skill se mantém agnóstica
+
+Três decisões de desenho, todas nascidas de um erro que a análise manual corrigiu:
+
+**1. O sinal é a forma do código, nunca a tecnologia.** A regra de injeção diz explicitamente
+que *"presença de SQLite não é sinal; concatenação de entrada do usuário é"*. Isso importa
+porque o `ecommerce-api-legacy` **usa banco e não tem injeção**: as queries são parametrizadas.
+Uma skill que marcasse "usa banco, logo injeção" daria falso positivo justamente no projeto que
+acerta no acesso a dados enquanto erra feio em criptografia. Foi a suposição por analogia que a
+análise manual desmentiu.
+
+**2. Limiar relativo, nunca absoluto.** God class aparece como arquivo Python de 314 linhas e
+como classe JavaScript de 141. Se o catálogo dissesse "acima de 300 linhas", perderia o caso
+JS inteiro. O que se conta é **responsabilidade cruzando camadas**; o tamanho é pista.
+
+**3. A Fase 1 não pode inferir arquitetura pela árvore de diretórios.** O `task-manager-api`
+tem `models/`, `routes/` e `services/` e mesmo assim não tem camada de controller. O
+procedimento é abrir os handlers e medir onde a regra mora; o sinal objetivo é arquivo de rota
+acima de ~150 linhas.
+
+O mesmo vale para N+1, que é descrito como padrão estrutural (I/O dentro de laço sobre
+resultado de I/O) e por isso foi encontrado tanto em `for` de Python quanto em callbacks
+aninhados de JavaScript.
+
+### Desafios encontrados
+
+**O catálogo puxa a severidade para cima sozinho.** A primeira versão classificava quase tudo
+como CRITICAL, e um relatório em que todo item é crítico não ajuda a priorizar nada. A solução
+foi fixar a severidade **no anti-pattern**, não no caso: o que varia por ocorrência é a
+justificativa. Está escrito no topo do catálogo como regra.
+
+**Distinguir correção de regressão.** Consertar a SQL Injection do projeto 1 **muda** a resposta
+de um endpoint: `POST /login` com aspa no campo senha deixa de devolver 200. Sem declarar isso,
+a validação acusaria quebra de contrato exatamente onde o trabalho deu certo. O harness ganhou
+um campo `mudanca_esperada` por projeto para separar as duas coisas.
+
+**A troca ingênua de API deprecada quebra a aplicação.** No projeto 3, trocar
+`datetime.utcnow()` por `datetime.now(timezone.utc)` faz toda comparação com data do banco
+levantar `TypeError`, porque as colunas do SQLite guardam datetime ingênuo. O playbook ganhou o
+aviso explícito: **ou troca tudo, ou não troca nada**. Detalhes em `reports/audit-project-3.md`.
+
+**Validar de verdade pega o que revisão de código aprova.** No projeto 2, mover a validação de
+senha para antes da busca do curso fez o `404` de curso inexistente virar `400`. O código
+estava mais correto e o contrato, quebrado. Só o harness pegou.
 
 ## Resultados
 
-_A ser preenchido: resumo dos três relatórios de auditoria, comparação antes/depois, checklist de
-validação e evidência das aplicações rodando após a refatoração._
+### Resumo dos três relatórios
+
+| | Projeto 1 | Projeto 2 | Projeto 3 |
+|---|---|---|---|
+| CRITICAL | 6 | 3 | 3 |
+| HIGH | 2 | 4 | 2 |
+| MEDIUM | 3 | 3 | 4 |
+| LOW | 3 | 2 | 2 |
+| **Total** | **14** | **12** | **11** |
+| Achados da análise manual reencontrados | 7/7 | 7/7 | 8/8 |
+| Achados novos, que a leitura manual não tinha | 3 | 5 | 3 |
+
+Relatórios completos em `reports/audit-project-1.md`, `-2` e `-3`.
+
+**Os oito achados que a skill viu e a leitura manual não:**
+
+- `POST /admin/query` executando SQL arbitrário do corpo, sem autenticação (projeto 1)
+- `POST /admin/reset-db` apagando as 4 tabelas, sem autenticação (projeto 1)
+- `GET /usuarios` devolvendo a **senha de todos os usuários** (projeto 1)
+- número do cartão e chave live do gateway gravados em log a cada checkout (projeto 2)
+- `totalRevenue` exportado por valor: o acumulador **nunca funcionou** (projeto 2)
+- callbacks do relatório ignorando `err`, deixando a requisição pendurada (projeto 2)
+- `DELETE /api/users/:id` deixando matrículas e pagamentos órfãos (projeto 2)
+- `to_dict()` do usuário devolvendo o **hash da senha** em toda rota que serializa (projeto 3)
+
+### Antes e depois
+
+| | Antes | Depois |
+|---|---|---|
+| **Projeto 1** | 4 arquivos, 780 linhas, sem camadas | `config/ models/ controllers/ views/ middlewares/`, entry point que só monta |
+| | SQL por concatenação em 12 pontos | 100% parametrizado |
+| | senha em texto plano, conferida no SQL | scrypt com salt, verificada em Python |
+| | listagem de pedidos: 1+N+N*M consultas | 2 consultas |
+| | relatório de vendas: 5 consultas | 1 agregada |
+| | 16 blocos `except` idênticos | 1 handler central |
+| **Projeto 2** | `AppManager` com 6 responsabilidades | 2 models, 3 controllers, 1 view, 1 middleware |
+| | relatório: 1+N+N*M consultas, 4 níveis de callback | 1 consulta com `LEFT JOIN`, `async/await` |
+| | `badCrypto()` reversível e colidível | scrypt com `timingSafeEqual` |
+| | `DELETE` deixava órfãos | exclusão em cascata, em transação |
+| **Projeto 3** | rotas com 733 linhas somadas | **118 linhas**, e nasceu `controllers/` |
+| | `overdue` copiado 6 vezes | `Task.is_overdue()`, uma vez |
+| | 4 pontos de N+1 | consultas agregadas |
+| | `to_dict()` vazando o hash da senha | projeção pública explícita |
+| | MD5 sem salt | scrypt com salt |
+| | 19 usos de `datetime.utcnow()` | `utils/tempo.agora_utc()` |
+
+### Checklist de validação do enunciado
+
+**Fase 1 - Análise**
+
+| Item | P1 | P2 | P3 |
+|---|---|---|---|
+| Linguagem detectada corretamente | ✅ | ✅ | ✅ |
+| Framework detectado corretamente | ✅ | ✅ | ✅ |
+| Domínio descrito corretamente | ✅ | ✅ (LMS, não e-commerce) | ✅ |
+| Número de arquivos condiz com a realidade | ✅ 4 | ✅ 3 | ✅ 11 |
+
+**Fase 2 - Auditoria**
+
+| Item | P1 | P2 | P3 |
+|---|---|---|---|
+| Relatório segue o template | ✅ | ✅ | ✅ |
+| Cada finding tem arquivo e linhas exatos | ✅ | ✅ | ✅ |
+| Ordenados por severidade | ✅ | ✅ | ✅ |
+| Mínimo de 5 findings | ✅ 14 | ✅ 12 | ✅ 11 |
+| Detecção de APIs deprecated incluída | não aplicável | não aplicável | ✅ 19 locais |
+| Pausa e pede confirmação antes da Fase 3 | ✅ | ✅ | ✅ |
+
+**Fase 3 - Refatoração**
+
+| Item | P1 | P2 | P3 |
+|---|---|---|---|
+| Estrutura segue MVC | ✅ | ✅ | ✅ |
+| Configuração extraída, sem hardcoded | ✅ | ✅ | ✅ |
+| Models abstraem os dados | ✅ | ✅ | ✅ |
+| Views/Routes só roteiam | ✅ | ✅ | ✅ |
+| Controllers concentram o fluxo | ✅ | ✅ | ✅ |
+| Error handling centralizado | ✅ | ✅ | ✅ |
+| Entry point claro | ✅ | ✅ | ✅ |
+| Aplicação inicia sem erros | ✅ | ✅ | ✅ |
+| Endpoints originais respondem | ✅ 17/17 | ✅ 6/6 | ✅ 16/16 |
+
+**Critérios de aceite (os quatro obrigatórios, nos 3 projetos)**
+
+| Critério | P1 | P2 | P3 |
+|---|---|---|---|
+| Fase 1 detecta stack | ✅ | ✅ | ✅ |
+| Fase 2 encontra ≥ 5 findings | ✅ 14 | ✅ 12 | ✅ 11 |
+| Fase 2 tem ao menos 1 CRITICAL ou HIGH | ✅ 8 | ✅ 7 | ✅ 5 |
+| Fase 3 aplicação funciona após refatoração | ✅ | ✅ | ✅ |
+
+### Log das aplicações rodando após a refatoração
+
+```
+$ python tools/smoke_test.py --projeto code-smells-project
+endpoint                    antes    depois
+  index                       200       200
+  health                      200       200
+  produtos_listar             200       200
+  produto_404                 404       404
+  login_ok                    200       200
+  login_errado                401       401
+  login_injecao               200       401   <-- mudou de propósito
+  pedido_criar                201       201
+  relatorio_vendas            200       200
+  [...]
+✅ aplicação subiu e 17 endpoint(s) conferidos: 16 idênticos, 1 corrigidos de propósito
+
+$ python tools/smoke_test.py --projeto ecommerce-api-legacy
+✅ aplicação subiu e 6 endpoint(s) conferidos: 6 idênticos, 0 corrigidos de propósito
+
+$ python tools/smoke_test.py --projeto task-manager-api
+✅ aplicação subiu e 16 endpoint(s) conferidos: 16 idênticos, 0 corrigidos de propósito
+```
+
+A linha `login_injecao: 200 -> 401` é a evidência mais direta deste trabalho: **antes** da
+refatoração, `POST /login` com `{"senha": "x' OR '1'='1"}` respondia 200 e autenticava. A
+vulnerabilidade não era teórica, e a correção também não.
+
+### Mudanças deliberadas de contrato
+
+Cinco, todas declaradas nos relatórios, nenhuma acidental:
+
+1. `POST /admin/query` **removida** (projeto 1) - executava SQL arbitrário.
+2. `POST /admin/reset-db` **removida** (projeto 1) - apagava as tabelas sem autenticação.
+3. `GET /health` deixou de devolver `secret_key`, `db_path` e `debug` (projeto 1).
+4. Corpos de erro passaram de string solta para JSON `{"erro": ...}` (projeto 2), que é o que
+   o item "Error handling centralizado" do enunciado exige.
+5. `to_dict()` do usuário parou de devolver o hash da senha (projeto 3), o que muda o corpo de
+   `GET /users/<id>` e do `POST /login`.
 
 ## Como Executar
 
-_A ser preenchido: pré-requisitos, comando por projeto e como validar a refatoração._
+### Pré-requisitos
+
+- Python 3.10+ e Node.js 18+
+- Claude Code (a skill usa o formato `.claude/skills/`)
+
+### Executar a skill
+
+```bash
+cd code-smells-project    && claude "/refactor-arch"
+cd ../ecommerce-api-legacy && claude "/refactor-arch"
+cd ../task-manager-api     && claude "/refactor-arch"
+```
+
+A skill roda as três fases em sequência e **para na Fase 2**, esperando um `y` antes de tocar
+em qualquer arquivo. O relatório já fica salvo em `reports/` mesmo se você responder `n`.
+
+### Rodar cada projeto
+
+```bash
+# Projeto 1 - Python/Flask, porta 5000
+cd code-smells-project
+python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+python src/app.py
+
+# Projeto 2 - Node/Express, porta 3000
+cd ecommerce-api-legacy && npm install && npm start
+
+# Projeto 3 - Python/Flask, porta 5000
+cd task-manager-api
+python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+python seed.py && python app.py
+```
+
+Configuração por ambiente, com defaults de desenvolvimento em todos:
+`SECRET_KEY`, `DEBUG`, `HOST`, `PORT`, `CORS_ORIGENS`, `DATABASE_URL`,
+`EMAIL_USER`/`EMAIL_PASSWORD` (projeto 3), `PAYMENT_GATEWAY_KEY`/`DB_PASS` (projeto 2).
+
+### Validar que a refatoração funciona
+
+```bash
+python tools/smoke_test.py --projeto code-smells-project
+python tools/smoke_test.py --projeto ecommerce-api-legacy
+python tools/smoke_test.py --projeto task-manager-api
+```
+
+O harness sobe o servidor de verdade, chama cada endpoint e **compara com a linha de base
+gravada antes da refatoração** (`reports/_baseline-*.json`). Ele sai com código 1 se algum
+endpoint regredir, e distingue regressão de correção deliberada.
+
+Para regravar uma linha de base (só faz sentido a partir do código original):
+
+```bash
+python tools/smoke_test.py --projeto <nome> --salvar reports/_baseline-<nome>.json
+```
+
+> ⚠️ O projeto 1 precisa de um venv em `code-smells-project/.venv-check` e o projeto 3 em
+> `task-manager-api/.venv-check`, que é o interpretador que o harness invoca. Ambos estão no
+> `.gitignore`.

@@ -1,0 +1,196 @@
+{
+  "_boot": {
+    "subiu": true
+  },
+  "index": {
+    "status": 200,
+    "forma": "objeto",
+    "chaves": [
+      "message",
+      "version"
+    ]
+  },
+  "health": {
+    "status": 200,
+    "forma": "objeto",
+    "chaves": [
+      "status",
+      "timestamp"
+    ]
+  },
+  "tasks_listar": {
+    "status": 200,
+    "forma": "lista[10]",
+    "chaves": [
+      "category_id",
+      "category_name",
+      "created_at",
+      "description",
+      "due_date",
+      "id",
+      "overdue",
+      "priority",
+      "status",
+      "tags",
+      "title",
+      "updated_at",
+      "user_id",
+      "user_name"
+    ]
+  },
+  "task_1": {
+    "status": 200,
+    "forma": "objeto",
+    "chaves": [
+      "category_id",
+      "created_at",
+      "description",
+      "due_date",
+      "id",
+      "overdue",
+      "priority",
+      "status",
+      "tags",
+      "title",
+      "updated_at",
+      "user_id"
+    ]
+  },
+  "task_404": {
+    "status": 404,
+    "forma": "objeto",
+    "chaves": [
+      "error"
+    ]
+  },
+  "task_criar": {
+    "status": 201,
+    "forma": "objeto",
+    "chaves": [
+      "category_id",
+      "created_at",
+      "description",
+      "due_date",
+      "id",
+      "priority",
+      "status",
+      "tags",
+      "title",
+      "updated_at",
+      "user_id"
+    ]
+  },
+  "task_titulo_curto": {
+    "status": 400,
+    "forma": "objeto",
+    "chaves": [
+      "error"
+    ]
+  },
+  "tasks_busca": {
+    "status": 200,
+    "forma": "lista[11]",
+    "chaves": [
+      "category_id",
+      "created_at",
+      "description",
+      "due_date",
+      "id",
+      "priority",
+      "status",
+      "tags",
+      "title",
+      "updated_at",
+      "user_id"
+    ]
+  },
+  "tasks_stats": {
+    "status": 200,
+    "forma": "objeto",
+    "chaves": [
+      "cancelled",
+      "completion_rate",
+      "done",
+      "in_progress",
+      "overdue",
+      "pending",
+      "total"
+    ]
+  },
+  "users_listar": {
+    "status": 200,
+    "forma": "lista[3]",
+    "chaves": [
+      "active",
+      "created_at",
+      "email",
+      "id",
+      "name",
+      "role",
+      "task_count"
+    ]
+  },
+  "user_1": {
+    "status": 200,
+    "forma": "objeto",
+    "chaves": [
+      "active",
+      "created_at",
+      "email",
+      "id",
+      "name",
+      "password",
+      "role",
+      "tasks"
+    ]
+  },
+  "login_ok": {
+    "status": 200,
+    "forma": "objeto",
+    "chaves": [
+      "message",
+      "token",
+      "user"
+    ]
+  },
+  "login_errado": {
+    "status": 401,
+    "forma": "objeto",
+    "chaves": [
+      "error"
+    ]
+  },
+  "relatorio_resumo": {
+    "status": 200,
+    "forma": "objeto",
+    "chaves": [
+      "generated_at",
+      "overdue",
+      "overview",
+      "recent_activity",
+      "tasks_by_priority",
+      "tasks_by_status",
+      "user_productivity"
+    ]
+  },
+  "relatorio_user": {
+    "status": 200,
+    "forma": "objeto",
+    "chaves": [
+      "statistics",
+      "user"
+    ]
+  },
+  "categorias": {
+    "status": 200,
+    "forma": "lista[4]",
+    "chaves": [
+      "color",
+      "created_at",
+      "description",
+      "id",
+      "name",
+      "task_count"
+    ]
+  }
+}
