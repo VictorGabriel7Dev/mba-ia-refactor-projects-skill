@@ -1,34 +1,52 @@
-from flask import Flask
+"""Composition root: monta a aplicação e conecta as camadas. Nenhuma regra aqui."""
+from flask import Flask, jsonify
 from flask_cors import CORS
+
+from config import settings
 from database import db
+from middlewares import error_handler
+from routes.report_routes import report_bp
 from routes.task_routes import task_bp
 from routes.user_routes import user_bp
-from routes.report_routes import report_bp
-import os, sys, json, datetime
+from services.notification_service import NotificationService
+from utils.tempo import agora_utc
 
-app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tasks.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'super-secret-key-123'
+def criar_servico_notificacao() -> NotificationService:
+    return NotificationService(settings.EMAIL_HOST, settings.EMAIL_PORT,
+                               settings.EMAIL_USER, settings.EMAIL_PASSWORD)
 
-CORS(app)
-db.init_app(app)
 
-app.register_blueprint(task_bp)
-app.register_blueprint(user_bp)
-app.register_blueprint(report_bp)
+def criar_app() -> Flask:
+    app = Flask(__name__)
+    app.config['SQLALCHEMY_DATABASE_URI'] = settings.SQLALCHEMY_DATABASE_URI
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = settings.SQLALCHEMY_TRACK_MODIFICATIONS
+    app.config['SECRET_KEY'] = settings.SECRET_KEY
 
-@app.route('/health')
-def health():
-    return {'status': 'ok', 'timestamp': str(datetime.datetime.now())}
+    CORS(app, origins=settings.CORS_ORIGENS)
+    db.init_app(app)
+    error_handler.registrar(app)
 
-@app.route('/')
-def index():
-    return {'message': 'Task Manager API', 'version': '1.0'}
+    app.register_blueprint(task_bp)
+    app.register_blueprint(user_bp)
+    app.register_blueprint(report_bp)
 
-with app.app_context():
-    db.create_all()
+    app.extensions['notificacao'] = criar_servico_notificacao()
+
+    @app.get('/health')
+    def health():
+        return jsonify({'status': 'ok', 'timestamp': str(agora_utc())})
+
+    @app.get('/')
+    def index():
+        return jsonify({'message': 'Task Manager API', 'version': '1.0'})
+
+    with app.app_context():
+        db.create_all()
+    return app
+
+
+app = criar_app()
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=settings.DEBUG, host=settings.HOST, port=settings.PORT)
